@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Age Verification dApp</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #f4f7f6;
+      }
+
+      h1 {
+        text-align: center;
+        margin-bottom: 20px;
+      }
+
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      }
+
+      label,
+      input,
+      button {
+        width: 100%;
+        padding: 10px;
+        margin: 8px 0;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+      }
+
+      button {
+        background-color: #007bff;
+        color: white;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background-color: #0056b3;
+      }
+
+      .status {
+        padding: 10px;
+        margin-top: 20px;
+        border-radius: 4px;
+        font-weight: bold;
+      }
+
+      .status.success {
+        background-color: #d4edda;
+        color: #155724;
+      }
+
+      .status.error {
+        background-color: #f8d7da;
+        color: #721c24;
+      }
+
+      .status.info {
+        background-color: #cce5ff;
+        color: #004085;
+      }
+
+      #account {
+        text-align: center;
+        font-size: 18px;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Age Verification dApp</h1>
+
+      <div id="account">
+        <p>Connect your wallet to start</p>
+      </div>
+
+      <label for="birthdate">Enter your birthdate (YYYY-MM-DD)</label>
+      <input type="date" id="birthdate" />
+      <button id="storeBirthdateButton" onclick="storeBirthdate()">
+        Store Birthdate Hash
+      </button>
+
+      <button id="verifyAgeButton" onclick="verifyAge()">Verify Age</button>
+
+      <div id="statusMessage" class="status"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/web3/dist/web3.min.js"></script>
+    <script>
+      // Contract ABI and Address (replace with your actual contract details)
+      const contractABI = [
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "_requiredAge",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "constructor",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "user",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "bool",
+              name: "isOverAge",
+              type: "bool",
+            },
+          ],
+          name: "AgeVerified",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "user",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "bytes32",
+              name: "birthdateHash",
+              type: "bytes32",
+            },
+          ],
+          name: "BirthdateHashStored",
+          type: "event",
+        },
+        {
+          inputs: [],
+          name: "getStoredBirthdateHash",
+          outputs: [
+            {
+              internalType: "bytes32",
+              name: "",
+              type: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "requiredAge",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "bytes32",
+              name: "_birthdateHash",
+              type: "bytes32",
+            },
+          ],
+          name: "storeBirthdateHash",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "verifyAge",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+      ];
+
+      const contractAddress = "0xYourContractAddressHere"; // Replace with your contract address
+      let web3;
+      let contract;
+      let userAccount;
+
+      // Check if MetaMask is available
+      if (typeof window.ethereum !== "undefined") {
+        web3 = new Web3(window.ethereum);
+        ethereum
+          .request({ method: "eth_requestAccounts" })
+          .then((accounts) => {
+            userAccount = accounts[0];
+            document.getElementById(
+              "account"
+            ).innerText = `Connected Account: ${userAccount}`;
+            initContract();
+          })
+          .catch((error) => {
+            console.error("Error getting accounts:", error);
+          });
+      } else {
+        alert("Please install MetaMask to interact with the blockchain.");
+      }
+
+      // Initialize contract
+      function initContract() {
+        contract = new web3.eth.Contract(contractABI, contractAddress);
+      }
+
+      // Store the hashed birthdate
+      function storeBirthdate() {
+        const birthdate = document.getElementById("birthdate").value;
+        if (!birthdate) {
+          alert("Please enter a valid birthdate.");
+          return;
+        }
+
+        const birthTimestamp = new Date(birthdate).getTime() / 1000; // Convert to Unix timestamp
+        const birthdateHash = web3.utils.soliditySha3(
+          birthTimestamp.toString()
+        );
+
+        contract.methods
+          .storeBirthdateHash(birthdateHash)
+          .send({ from: userAccount })
+          .on("transactionHash", () => {
+            showStatus("Storing birthdate hash...", "info");
+          })
+          .on("receipt", () => {
+            showStatus("Birthdate hash stored successfully!", "success");
+          })
+          .on("error", (error) => {
+            console.error("Error storing birthdate hash:", error);
+            showStatus("Error storing birthdate hash", "error");
+          });
+      }
+
+      // Verify if the user is over the required age
+      function verifyAge() {
+        contract.methods
+          .verifyAge()
+          .call({ from: userAccount })
+          .then((isOverAge) => {
+            if (isOverAge) {
+              showStatus("You are over the required age.", "success");
+            } else {
+              showStatus("You are not over the required age.", "error");
+            }
+          })
+          .catch((error) => {
+            console.error("Error verifying age:", error);
+            showStatus("Error verifying age", "error");
+          });
+      }
+
+      // Show status message
+      function showStatus(message, type) {
+        const statusMessageElement = document.getElementById("statusMessage");
+        statusMessageElement.innerText = message;
+        statusMessageElement.className = `status ${type}`;
+      }
+    </script>
+  </body>
+</html>
